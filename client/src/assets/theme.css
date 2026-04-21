@@ -1,0 +1,60 @@
+:root {
+  /* Default Blue Theme */
+  --primary-color: #1890ff;
+  --secondary-color: #001529;
+  --accent-color: #40a9ff;
+  --bg-color: #f0f2f5;
+  --text-color: #000000;
+  --border-color: #d9d9d9;
+  --hover-border-color: #1890ff;
+  --shadow-color: rgba(24, 144, 255, 0.2);
+  --node-bg-default: rgba(24, 144, 255, 0.1);
+  --node-bg-active: #1890ff;
+  --node-text-active: #FFFFFF;
+  
+  /* ECharts specific variables */
+  --chart-line-color: #bae7ff;
+  --chart-line-hover: #1890ff;
+}
+
+[data-theme="black"] {
+  --primary-color: #2d7dff;
+  --secondary-color: #1f1f1f;
+  --accent-color: #4e8fff;
+  --bg-color: #1e1e1e;
+  --text-color: #d4d4d4;
+  --border-color: #3c3c3c;
+  --hover-border-color: #5e97ff;
+  --shadow-color: rgba(0, 0, 0, 0.35);
+  --node-bg-default: rgba(212, 212, 212, 0.07);
+  --node-bg-active: #2d7dff;
+  --node-text-active: #ffffff;
+  --chart-line-color: #3a4250;
+  --chart-line-hover: #6aa2ff;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease-out, color 0.3s ease-out;
+}
+
+/* Common Element Plus overrides */
+.el-button--primary {
+  --el-button-bg-color: var(--primary-color);
+  --el-button-border-color: var(--primary-color);
+  --el-button-hover-bg-color: var(--accent-color);
+  --el-button-hover-border-color: var(--accent-color);
+}
+
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--primary-color) inset !important;
+}
+
+/* Scrollbar styling for black theme */
+[data-theme="black"] ::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+[data-theme="black"] ::-webkit-scrollbar-thumb {
+  background: #3b3b3b;
+}
