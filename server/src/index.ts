@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import apiRoutes from "./routes/api.js";
 import { setUseMemory } from "./services/knowledgeService.js";
+import { reindexMissingEmbeddings } from "./services/retrievalService.js";
 
 dotenv.config();
 
@@ -11,6 +12,19 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/vue-practice";
+
+/** 为历史节点补建向量索引，避免开启 RAG 后老数据检索不到。失败不影响服务启动。 */
+const backfillEmbeddings = () => {
+  void reindexMissingEmbeddings()
+    .then((count) => {
+      if (count > 0) {
+        console.log(`[RAG] 已为 ${count} 个存量节点补建向量索引`);
+      }
+    })
+    .catch((error: any) => {
+      console.error("[RAG] 补建向量索引失败:", error.message);
+    });
+};
 
 // Middleware
 app.use(cors());
@@ -25,7 +39,10 @@ mongoose
   .connect(MONGODB_URI, {
     serverSelectionTimeoutMS: 3000,
   })
-  .then(() => console.log("Connected to MongoDB"))
+  .then(() => {
+    console.log("Connected to MongoDB");
+    backfillEmbeddings();
+  })
   .catch((err) => {
     console.error("MongoDB connection error:", err.message);
     console.log("Switching to in-memory database fallback.");

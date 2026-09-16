@@ -241,6 +241,40 @@ export const exportKnowledgeAsMarkdownZip = (nodes: KnowledgeNode[]) => {
   return createZipBlob(entries)
 }
 
+/**
+ * 将整棵知识树导出为单个 Markdown 文件。
+ * 用层级标题（# / ## / ###）表达树结构，每个节点：
+ *   1. 标题为用户提问
+ *   2. 正文为 AI 回答（含上下文提示）
+ * 非常适合快速作为学习笔记阅读或沉淀。
+ */
+export const exportKnowledgeAsSingleMarkdown = (nodes: KnowledgeNode[]) => {
+  const roots = toTree(nodes)
+  const lines: string[] = []
+  lines.push('# AI 学习树笔记')
+  lines.push('')
+  lines.push(`> 导出时间：${new Date().toLocaleString()}　·　节点数：${nodes.length}`)
+  lines.push('')
+
+  const walk = (node: TreeNode, depth: number) => {
+    const heading = '#'.repeat(Math.min(6, Math.max(2, depth + 2)))
+    lines.push(`${heading} ${node.question}`)
+    lines.push('')
+    if (node.answer) {
+      lines.push(node.answer.trim())
+      lines.push('')
+    } else {
+      lines.push('_（暂无回答内容）_')
+      lines.push('')
+    }
+    node.children.forEach((child) => walk(child, depth + 1))
+  }
+
+  roots.forEach((root) => walk(root, 0))
+
+  return new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+}
+
 export const triggerDownload = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

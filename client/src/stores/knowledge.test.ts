@@ -52,11 +52,13 @@ describe('Knowledge Store', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     store.nodes = [node1, node2, node3] as any
 
-    // Restore session for node 3
+    // Restore session for node 3 - 应恢复完整的根->节点路径
     await store.restoreSession('3')
 
-    expect(store.currentChatHistory).toHaveLength(1)
-    expect(store.currentChatHistory[0]?._id).toBe('3')
+    expect(store.currentChatHistory).toHaveLength(3)
+    expect(store.currentChatHistory[0]?._id).toBe('1')
+    expect(store.currentChatHistory[1]?._id).toBe('2')
+    expect(store.currentChatHistory[2]?._id).toBe('3')
   })
 
   it('should clear history when asking a new root question', async () => {

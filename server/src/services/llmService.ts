@@ -6,7 +6,8 @@ dotenv.config();
 interface LLMConfig {
   provider: "qwen" | "deepseek" | "openai" | "ollama";
   model: string;
-  apiKey?: string;
+  // exactOptionalPropertyTypes 下需显式允许 undefined，否则无法从 process.env 赋值
+  apiKey?: string | undefined;
   apiUrl: string;
   timeout: number;
 }
@@ -176,4 +177,127 @@ export async function generateAnswer(
     console.error("[LLM] Failed to generate answer:", error);
     throw error;
   }
+}
+
+// ── Streaming support ────────────────────────────────────────────────────────
+
+async function callLLMAPIStream(
+  messages: Message[],
+  onToken: (token: string) => void,
+): Promise<string> {
+  const headers: Record<string, string> = {
+    ...buildHeaders(config),
+    "Content-Type": "application/json",
+  };
+
+  let requestBody: any;
+  switch (config.provider) {
+    case "qwen":
+      requestBody = {
+        model: config.model,
+        input: { messages },
+        parameters: {
+          temperature: 0.7,
+          max_tokens: 2000,
+          incremental_output: true,
+        },
+      };
+      headers["X-DashScope-SSE"] = "enable";
+      break;
+    case "ollama":
+      requestBody = { model: config.model, messages, stream: true };
+      break;
+    default: // openai, deepseek
+      requestBody = {
+        model: config.model,
+        messages,
+        stream: true,
+        temperature: 0.7,
+      };
+  }
+
+  const response = await fetch(config.apiUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(config.timeout),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`LLM API error ${response.status}: ${errText}`);
+  }
+
+  const reader = (response.body as any)!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines: string[] = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === "data: [DONE]" || trimmed.startsWith(":"))
+        continue;
+
+      let dataStr = trimmed;
+      if (dataStr.startsWith("data:")) dataStr = dataStr.slice(5).trim();
+      if (!dataStr) continue;
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(dataStr);
+      } catch {
+        continue;
+      }
+
+      let token = "";
+      switch (config.provider) {
+        case "qwen":
+          token =
+            parsed?.output?.text ||
+            parsed?.output?.choices?.[0]?.message?.content ||
+            "";
+          break;
+        case "ollama":
+          token = parsed?.message?.content || "";
+          break;
+        default:
+          token = parsed?.choices?.[0]?.delta?.content || "";
+      }
+
+      if (token) {
+        fullContent += token;
+        onToken(token);
+      }
+    }
+  }
+
+  return fullContent;
+}
+
+export async function generateAnswerStream(
+  question: string,
+  context: string | undefined,
+  onToken: (token: string) => void,
+): Promise<string> {
+  const messages = buildMessages(question, context);
+
+  if (!isConfigured(config)) {
+    const mock = getMockResponse(question);
+    // Simulate streaming for demo
+    const lines = mock.split("\n");
+    for (const line of lines) {
+      onToken(line + "\n");
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    return mock;
+  }
+
+  return callLLMAPIStream(messages, onToken);
 }

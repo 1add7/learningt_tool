@@ -1,61 +1,47 @@
-import { ref, computed, type Ref } from 'vue';
-import { useKnowledgeStore } from '../stores/knowledge';
-import type { ContextItem } from './useContext';
+import { ref, computed, type Ref } from 'vue'
+import { useKnowledgeStore } from '../stores/knowledge'
+import type { ContextItem } from './useContext'
 
-export type MountMode = 'followup' | 'context-anchor';
+/**
+ * 挂载模式 - 控制新问题挂载在知识树上的位置：
+ * - followup（深入探究）：挂载到当前选中节点作为子节点，继续深挖当前话题
+ * - parallel（平行追问）：挂载到当前选中节点的父节点，形成平行的新分支
+ * - root：作为全新独立根节点，开启一条新的知识分支
+ */
+export type MountMode = 'followup' | 'parallel' | 'root'
 
 export function useMountMode(selectedContexts: Ref<ContextItem[]>) {
-  const store = useKnowledgeStore();
-  const askMode = ref<MountMode>('followup');
+  const store = useKnowledgeStore()
+  const askMode = ref<MountMode>('followup')
 
-  const buildNodeChain = (nodeId: string) => {
-    const chain: string[] = [];
-    let cursor = store.nodes.find(n => n._id === nodeId);
-    while (cursor) {
-      chain.unshift(cursor._id);
-      const parentId = cursor.parentId;
-      if (!parentId) break;
-      cursor = store.nodes.find(n => n._id === parentId);
-    }
-    return chain;
-  };
+  /** 最终用于创建节点的 parentId（undefined 即为新根节点） */
+  const effectiveParentId = computed<string | undefined>(() => {
+    if (askMode.value === 'root') return undefined
 
-  const findCommonAncestor = (nodeIds: string[]) => {
-    if (nodeIds.length === 0) return undefined;
-    if (nodeIds.length === 1) return nodeIds[0];
+    const selected = store.selectedNodeId
+    if (!selected) return undefined
 
-    const chains = nodeIds.map(id => buildNodeChain(id));
-    let index = 0;
-    let lastCommon = '';
-
-    while (true) {
-      const current = chains[0]?.[index];
-      if (!current) break;
-      if (chains.every(chain => chain[index] === current)) {
-        lastCommon = current;
-        index += 1;
-        continue;
-      }
-      break;
+    if (askMode.value === 'parallel') {
+      // 平行追问：挂到当前节点的父节点（形成兄弟节点）
+      const currentNode = store.nodes.find((n) => n._id === selected)
+      return currentNode?.parentId || undefined
     }
 
-    return lastCommon || nodeIds[0];
-  };
-
-  const anchorTargetNodeId = computed(() => {
-    if (askMode.value !== 'context-anchor') return null;
-    const uniqueIds = [...new Set(selectedContexts.value.map(item => item.sourceNodeId))];
-    return findCommonAncestor(uniqueIds) || null;
-  });
+    // followup（深入探究）：挂到当前选中节点
+    return selected
+  })
 
   const anchorTargetNode = computed(() => {
-    if (!anchorTargetNodeId.value) return null;
-    return store.nodes.find(node => node._id === anchorTargetNodeId.value) || null;
-  });
+    const id = effectiveParentId.value
+    if (!id) return null
+    return store.nodes.find((node) => node._id === id) || null
+  })
 
   return {
     askMode,
-    anchorTargetNodeId,
-    anchorTargetNode
-  };
+    effectiveParentId,
+    // 兼容旧 API 名称
+    anchorTargetNodeId: effectiveParentId,
+    anchorTargetNode,
+  }
 }

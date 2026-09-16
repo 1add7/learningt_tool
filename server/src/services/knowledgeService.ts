@@ -24,6 +24,7 @@ export const createNode = async (data: any) => {
         ? new mongoose.Types.ObjectId(data.parentId)
         : null,
       createdAt: new Date(),
+      citations: data.citations ?? [],
       __v: 0,
     };
     memoryStore.push(newNode);
@@ -79,3 +80,76 @@ export const deleteNodeRecursively = async (id: string) => {
   }
   await deleteNode(id);
 };
+
+/** 写入节点的向量表示。 */
+export const updateNodeEmbedding = async (
+  id: string,
+  embedding: number[],
+  embeddingModel: string,
+) => {
+  if (shouldUseMemory()) {
+    const node = memoryStore.find((n) => n._id.toString() === id);
+    if (node) {
+      node.embedding = embedding;
+      node.embeddingModel = embeddingModel;
+      node.embeddedAt = new Date();
+    }
+    return true;
+  }
+
+  await KnowledgeNode.findByIdAndUpdate(id, {
+    embedding,
+    embeddingModel,
+    embeddedAt: new Date(),
+  });
+  return true;
+};
+
+/**
+ * 取出可用于检索的候选节点。
+ * 传入 sessionId 时只在该会话内检索（默认行为，与「会话即知识域」的产品模型一致）。
+ */
+export const findSearchCandidates = async (sessionId?: string) => {
+  if (shouldUseMemory()) {
+    return memoryStore.filter((n) => !sessionId || n.sessionId === sessionId);
+  }
+  return await KnowledgeNode.find(sessionId ? { sessionId } : {});
+};
+
+/** 沿 parentId 向上回溯，返回 根 → 当前 的顺序。 */
+export const findAncestorChain = async (id: string, maxDepth = 5) => {
+  const chain: any[] = [];
+  let cursor: any = await findNodeById(id);
+  let depth = 0;
+
+  while (cursor && depth < maxDepth) {
+    chain.unshift(cursor);
+    const parentId = cursor.parentId ? cursor.parentId.toString() : null;
+    if (!parentId) break;
+    cursor = await findNodeById(parentId);
+    depth += 1;
+  }
+
+  return chain;
+};
+
+/** 找出还没有向量索引的节点 ID，用于补建索引。 */
+export const findUnindexedNodeIds = async (limit: number) => {
+  if (shouldUseMemory()) {
+    return memoryStore
+      .filter((n) => !Array.isArray(n.embedding) || n.embedding.length === 0)
+      .slice(0, limit)
+      .map((n) => n._id.toString());
+  }
+
+  const nodes = await KnowledgeNode.find({
+    $or: [
+      { embedding: { $exists: false } },
+      { embedding: { $size: 0 } },
+    ],
+  }).limit(limit);
+
+  return nodes.map((node) => node._id.toString());
+};
+
+export type { IKnowledgeNode };

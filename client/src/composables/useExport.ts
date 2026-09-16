@@ -4,6 +4,7 @@ import { useKnowledgeStore } from '../stores/knowledge'
 import {
   exportKnowledgeAsXMind,
   exportKnowledgeAsMarkdownZip,
+  exportKnowledgeAsSingleMarkdown,
   triggerDownload,
 } from '../utils/knowledgeExport'
 
@@ -11,6 +12,7 @@ export function useExport() {
   const store = useKnowledgeStore()
   const exportingXMind = ref(false)
   const exportingMarkdown = ref(false)
+  const exportingMarkdownFile = ref(false)
   const exportScope = ref<'all' | 'selected-path'>('all')
   const exportHighlightColor = ref('')
   const exportTargetNodeIds = ref<string[]>([])
@@ -85,6 +87,22 @@ export function useExport() {
     }
   }
 
+  const handleExportMarkdownFile = () => {
+    const nodes = getExportNodes()
+    if (!nodes || !nodes.length) {
+      ElMessage.warning('暂无可导出的知识节点')
+      return
+    }
+    exportingMarkdownFile.value = true
+    try {
+      const blob = exportKnowledgeAsSingleMarkdown(nodes)
+      triggerDownload(blob, `AI学习树-${getExportFileTime()}.md`)
+      ElMessage.success('单文件 Markdown 笔记已开始下载')
+    } finally {
+      exportingMarkdownFile.value = false
+    }
+  }
+
   const setExportHighlight = (color: string) => {
     exportHighlightColor.value = color
   }
@@ -116,6 +134,7 @@ export function useExport() {
   return {
     exportingXMind,
     exportingMarkdown,
+    exportingMarkdownFile,
     exportScope,
     exportHighlightColor,
     exportTargetNodeIds,
@@ -123,6 +142,7 @@ export function useExport() {
     exportTargetNodes,
     handleExportXMind,
     handleExportMarkdown,
+    handleExportMarkdownFile,
     setExportHighlight,
     clearExportHighlight,
     addExportTarget,
